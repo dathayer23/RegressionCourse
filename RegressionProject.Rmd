@@ -2,63 +2,183 @@
 title: "Untitled"
 author: "David Thayer"
 date: "Friday, May 22, 2015"
-output: html_document
+output: word_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+In this document we take the Motor Trend cars data and try to quntify what the effect of automatic transmissions on a cars mpg is. We will be using a study of variance inflation along with ANOVA of models based on this to determine the best model for our study.  Once we have selected a model we will create two data sets based on the original data one where all the cars are attributed a standard transmission and the other with all the cars are attributed an automatic transmission. We will plot the prediction band for each data set on the same plot to viduaslize the effect of automatic trasnsmission usage.
 
 ```{r, echo = FALSE}
 require(ggplot2, quietly = TRUE, warn.conflicts = FALSE)
 require(dplyr, quietly = TRUE, warn.conflicts = FALSE)
+require(car, quietly = TRUE, warn.conflicts = FALSE)
 data(mtcars)
 amdata = filter(mtcars, am == 1)
 smdata = filter(mtcars, am == 0)
-fit = lm(mpg ~ factor(am), data = mtcars)
-fitsm = lm(mpg ~ gear + carb + wt, data = smdata)
-fitam = lm(mpg ~ gear + carb + wt, data = amdata)
-str(fit)
-str(fit$coefficients)
-fit$coefficients
- g = ggplot(mtcars, aes(factor(am), mpg))
- g = g + geom_abline(intercept = fit$coefficients[1], slope = fit$coefficients[2])
- g = g + geom_smooth(method = "lm")
-g = g + geom_boxplot()
- g
+fit = lm(mpg ~ ., data = mtcars)
+```
+Checking Variance Inflation on all model elements we get:
+```{r echo = FALSE}
+vf = round(vif(fit), 3)
+vf
+```
+We do two ANOVA analysis on series of models built using elements in ascending order of variance inflation and in descending order of variance inflation.  See Tables 1 and 2
 
-fitsm$coefficients
-fitam$coefficients
+```{r echo = FALSE}
+fit1 = lm(mpg ~ am, data = mtcars)
+fit2 = update(fit1, mpg ~ am + drat)
+fit3 = update(fit1, mpg ~ am + drat + vs)
+fit4 = update(fit1, mpg ~ am + drat + vs + gear)
+fit5 = update(fit1, mpg ~ am + drat + vs + gear + qsec)
+fit6 = update(fit1, mpg ~ am + drat + vs + gear + qsec + carb)
+fit7 = update(fit1, mpg ~ am + drat + vs + gear  + qsec + carb + hp)
+fit8 = update(fit1, mpg ~ am + drat + vs + gear + qsec + carb + hp + wt)
+fit9 = update(fit1, mpg ~ am + drat + vs + gear + qsec + carb + hp + wt + cyl)
+fit10 = update(fit1, mpg ~ am + drat + vs + gear + qsec + carb + hp + wt + cyl + disp)
+
+an1 = anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10)
+```
 
 
-plotCovariant <- function (g, ylable) {
-  #g = ggplot(mtcars, aes(x = mpg, y = var))
-g = g + xlab("Miles Per gallon")
-g = g + ylab(ylable)
-g = g + geom_point(data = amdata, size = 2, colour = "red")
-g = g + geom_point(data = smdata, size = 2, colour = "blue")
-g = g + geom_smooth(data = amdata, method = "lm", colour = "red")
-g = g + geom_smooth(data = smdata, method = "lm", colour = "blue")
-g = g + geom_vline(xintercept = mean(amdata$mpg), colour = "red", linetype = "longdash")
-g = g + geom_vline(xintercept = mean(smdata$mpg), colour = "blue", linetype = "longdash")
-g
-  
+```{r echo = FALSE}
+fit2 = update(fit1, mpg ~ am + disp)
+fit3 = update(fit1, mpg ~ am + disp + cyl)
+fit4 = update(fit1, mpg ~ am + disp + cyl + wt)
+fit5 = update(fit1, mpg ~ am + disp + cyl + wt + hp)
+fit6 = update(fit1, mpg ~ am + disp + cyl + wt + hp + carb)
+fit7 = update(fit1, mpg ~ am + disp + cyl + wt + hp + carb + qsec)
+fit8 = update(fit1, mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear)
+fit9 = update(fit1, mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear + vs)
+fit10 = update(fit1, mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear + vs + drat)
+an2 = anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10)
+```
+
+
+Utilizing the top three from each study we get the following anova analysis  (see Table 3)
+```{r echo = FALSE}
+fit3 = update(fit1, mpg ~ am + disp + wt)
+fit4 = update(fit1, mpg ~ am + disp + wt + drat)
+fit5 = update(fit1, mpg ~ am + disp + wt + drat + vs)
+fit6 = update(fit1, mpg ~ am + disp + wt + drat + vs + carb)
+an3 = anova(fit1,fit2,fit3,fit4,fit5,fit6)
+```
+
+Adding drat into the model seems of rather low significance so we remove it to get our final model
+mpg ~ am + disp + wt + vs + carb
+
+```{r echo = FALSE}
+model = lm(mpg ~ am + disp + wt + vs + carb, data = mtcars)
+
+
+```
+Examining our residuals we see a normally distributed set of residual values with a single high leverage point.
+(See Appendix)
+
+We now examine the difference the choice of transmission makes in our model
+```{r echo = FALSE}
+set.seed(31425)
+varSeq <- function(v,n) { seq(min(v), max(v), length = n)}
+disp = varSeq(mtcars$disp, 100)
+wt = varSeq(mtcars$wt, 100)
+vs = sample(unique(mtcars$vs), 100, replace = TRUE)
+carb = sample(unique(mtcars$carb), 100, replace = TRUE)
+standardx = data.frame(am = rep(0,100), disp, wt, vs, carb)
+automaticx = data.frame(am = rep(1,100), disp, wt, vs, carb)
+standConf = data.frame(predict(model, newdata = standardx, interval = "confidence"))
+autoConf = data.frame(predict(model, newdata = automaticx, interval = "confidence"))
+standPred = data.frame(predict(model, newdata = standardx, interval = "prediction"))
+autoPred = data.frame(predict(model, newdata = automaticx, interval = "prediction"))
+standConf$sinterval = "confidence"
+autoConf$ainterval = "confidence"
+standPred$sinterval = "prediction"
+autoPred$ainterval = "prediction"
+standard = rbind(standConf, standPred)
+automatic = rbind(autoConf, autoPred)
+names(standard) <- c("fit", "lwr","upr", "interval")
+names(automatic) <- c("fit", "lwr", "upr", "interval")
+
+#names(standConf) <- c("scfit", "sclwr","scupr")
+#names(autoConf) <- c("acfit", "aclwr","acupr")
+#names(standPred) <- c("spfit", "splwr","spupr")
+#names(autoPred) <- c("apfit", "aplwr","apupr")
+#dat = cbind(standConf, autoConf,standPred, autoPred)
+#dat = cbind(standard,automatic)
+
+```
+
+```{r echo = FALSE}
+#attach(standard)
+#standard = standard[order(fit),]
+standard$x = 1:length(standard$fit)
+cfs = coef(lm(fit ~ x, data = standard))
+
+attach(automatic)
+#automatic = automatic[order(fit),]
+automatic$x = 1:length(automatic$fit)
+cfa = coef(lm(fit ~ x, data = automatic))
+plotIntervals <- function (data, c,  cfs) {
+  g = ggplot(data, aes(x = x, y = fit))
+  g = g + geom_point(size = 2, colour = c)
+  #g = g + geom_abline(intercept = cfs[1], slope = cfs[2], colour = c)
+  g = g + geom_ribbon(aes(ymin = lwr, ymax = upr, fill = interval), alpha = 0.2 )
+  g
 }
 
+plotIntervals(standard, "red", cfs)
+plotIntervals(automatic, "blue", cfa)
+meanPredIntervalStd = mean(standard$upr - standard$lwr)
+meanPredIntervalAuto = mean(automatic$upr - automatic$lwr)
 ```
 
-You can also embed plots, for example:
+##Conclusions
 
-```{r, echo=FALSE }
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = cyl)), "Cylinders")
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = disp)), "Displacement")
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = carb)), "Carburator Barrels" )
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = gear)), "Number of Gears" )
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = wt)), "Weight" )
-plotCovariant(ggplot(mtcars, aes(x = mpg, y = hp)), "Horse Power" )
+A line fitted through the predicted values for our model using a standard transmission has an y intercept of `r cfs[1]`.  A line fitted through the predicted values for our model using an automatic transmission has an y intercept of `r cfa[1]`. However the mean prediction interval of the model for the standard transmission is `r meanPredIntervalStd`. While the mean prediction interval of the model for the automatic transmission is `r meanPredIntervalAuto`.  Since the difference between the intercepts is `r cfa[1] - cfs[1]` which is less than half the mean prediction interval of both models we conclude that the choice of an automatic transmission vs. a standard transmission has little if no effect on the miles per gallon and that the engine choice , the weight, the type of carburator and the engine displacement have an overriding effect.
 
 
-
+## Appendix
+Plot of final model residuals
+```{r echo = FALSE}
+par(mfcol = (c(2,2)))
+plot(model)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+Table 1
+
+
+Models Ascending Order Of Variance Inflation | Significance
+----- | ------------
+mpg ~ am + drat | `r an1[2,6]`
+mpg ~ am + drat + vs | `r an1[3,6]`
+mpg ~ am + drat + vs + gear | `r an1[4,6]`
+mpg ~ am + drat + vs + gear + qsec | `r an1[5,6]`
+mpg ~ am + drat + vs + gear + qsec + carb | `r an1[6,6]`
+mpg ~ am + drat + vs + gear  + qsec + carb + hp | `r an1[7,6]`
+mpg ~ am + drat + vs + gear  + qsec + carb + hp + wt| `r an1[8,6]`
+mpg ~ am + drat + vs + gear  + qsec + carb + hp + wt + cyl| `r an1[9,6]`
+mpg ~ am + drat + vs + gear  + qsec + carb + hp + wt + cyl + disp| `r an1[10,6]`
+
+Table 2
+
+Models Descending Order Of Variance Inflation | Significance
+----- | ------------
+mpg ~ am + disp | `r an2[2,6]`
+mpg ~ am + disp + cyl | `r an2[3,6]`
+mpg ~ am + disp + cyl + wt | `r an2[4,6]`
+mpg ~ am + disp + cyl + wt + hp | `r an2[5,6]`
+mpg ~ am + disp + cyl + wt + hp + carb | `r an2[6,6]`
+mpg ~ am + disp + cyl + wt + hp + carb + qsec | `r an2[7,6]`
+mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear | `r an2[8,6]`
+mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear + vs | `r an2[9,6]`
+mpg ~ am + disp + cyl + wt + hp + carb + qsec + gear + vs + drat | `r an2[10,6]`
+
+Table 3
+
+Models Top Six Elements | Significance
+----- | ------------
+mpg ~ am + disp | `r an3[2,6]`
+mpg ~ am + disp + wt | `r an3[3,6]`
+mpg ~ am + disp + wt + drat | `r an3[4,6]`
+mpg ~ am + disp + wt + drat + vs | `r an3[5,6]`
+mpg ~ am + disp + wt + drat + vs + carb | `r an3[6,6]`
+
+
